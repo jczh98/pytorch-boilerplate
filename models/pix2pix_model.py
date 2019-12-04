@@ -1,7 +1,9 @@
 import torch
 from .base_model import BaseModel
-from . import networks
-
+import networks
+from networks.default_generators import UnetGenerator
+from networks.default_discriminators import NLayerDiscriminator
+from losses.ganloss import GANLoss
 
 class Pix2PixModel(BaseModel):
     """ This class implements the pix2pix model, for learning a mapping from input images to output images given paired data.
@@ -52,23 +54,26 @@ class Pix2PixModel(BaseModel):
             self.model_names = ['G', 'D']
         else:  # during test time, only load G
             self.model_names = ['G']
+        # define norm layer
+        norm_layer = networks.get_norm_layer(opt.norm)
         # define networks (both generator and discriminator)
-        self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
-                                      not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netG = self.define_net(UnetGenerator(opt.input_nc, opt.output_nc, 8, opt.ngf, norm_layer, not opt.no_dropout))
 
         if self.isTrain:  # define a discriminator; conditional GANs need to take both input and output images; Therefore, #channels for D is input_nc + output_nc
-            self.netD = networks.define_D(opt.input_nc + opt.output_nc, opt.ndf, opt.netD,
-                                          opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+            self.netD = self.define_net(NLayerDiscriminator(opt.input_nc + opt.output_nc, opt.ndf, norm_layer=norm_layer))
 
         if self.isTrain:
             # define loss functions
-            self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
+            self.criterionGAN = GANLoss(opt.gan_mode).to(self.device)
             self.criterionL1 = torch.nn.L1Loss()
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
+
+    def define_net(self, net):
+        return networks.init_net(net, self.opt.init_type, self.opt.init_gain, self.gpu_ids)
 
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
