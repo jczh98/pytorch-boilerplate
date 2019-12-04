@@ -7,7 +7,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from . import util, html
 from subprocess import Popen, PIPE
-
+import signal
 
 
 def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
@@ -85,6 +85,10 @@ class Visualizer():
             now = time.strftime("%c")
             log_file.write('================ Training Loss (%s) ================\n' % now)
 
+    def __del__(self):
+        print('Kill tensorboard subprocess pid:[%d]' % self.connection.pid)
+        os.killpg(self.connection.pid, signal.SIGKILL)
+
     def reset(self):
         """Reset the self.saved status"""
         self.saved = False
@@ -93,7 +97,7 @@ class Visualizer():
         """Create tensorboard connection"""
         cmd = sys.executable + ' -m tensorboard.main --port=%d --logdir=%s &>/dev/null &' % (self.port, os.path.join(self.display_log_dir, self.name))
         print('Command: %s' % cmd)
-        Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+        self.connection = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE, preexec_fn=os.setsid)
 
     def display_current_results(self, visuals, epoch, save_result):
         """Display current results on tensorboard; save current results to an HTML file.
