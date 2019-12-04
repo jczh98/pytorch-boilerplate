@@ -58,13 +58,21 @@ class Visualizer():
         """
         self.opt = opt  # cache the option
         self.display_id = opt.display_id
+        self.display_log_dir = opt.display_log_dir
         self.use_html = opt.isTrain and not opt.no_html
         self.win_size = opt.display_winsize
         self.name = opt.name
         self.port = opt.display_port
+        self.comment = opt.display_comment
         self.saved = False
         if self.display_id > 0:  # connect to a tensorboard server given <display_port> and <display_server>
-            self.writer = SummaryWriter()
+            import socket
+            from datetime import datetime
+            current_time = datetime.now().strftime('%b%d_%H-%M-%S')
+            log_dir = os.path.join(
+                self.display_log_dir, self.name, current_time + '_' + socket.gethostname() + self.comment)
+            self.writer = SummaryWriter(log_dir)
+            self.create_tensorboard_connection()
 
         if self.use_html:  # create an HTML object at <checkpoints_dir>/web/; images will be saved under <checkpoints_dir>/web/images/
             self.web_dir = os.path.join(opt.checkpoints_dir, opt.name, 'web')
@@ -80,6 +88,12 @@ class Visualizer():
     def reset(self):
         """Reset the self.saved status"""
         self.saved = False
+
+    def create_tensorboard_connection(self):
+        """Create tensorboard connection"""
+        cmd = sys.executable + ' -m tensorboard.main --port=%d --logdir=%s &>/dev/null &' % (self.port, os.path.join(self.display_log_dir, self.name))
+        print('Command: %s' % cmd)
+        Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
 
     def display_current_results(self, visuals, epoch, save_result):
         """Display current results on tensorboard; save current results to an HTML file.
